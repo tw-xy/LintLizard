@@ -37,10 +37,18 @@
 char joyKey[] = "joy";        // APP 里“摇杆”组件的键名，必须与这里一致
 
 #define SEND_PERIOD_MS   20   // 20ms 发一帧 = 50Hz
-#define LINK_TIMEOUT_MS 1000  // 超过 1s 没收到摇杆数据就自动回中（失效保护）
 #define Y_INVERT          1   // 推“前”变成后退 -> 改成 1
 #define X_INVERT          0   // 左右反了     -> 改成 1
 #define TEST_SWEEP        0   // 改成 1 = 不连 WiFi，自动来回扫描（只测串口链路）
+
+/* 关于"停车"（重要）：
+ * Blinker 的摇杆组件只在手指「移动」时上报数据，按住不动是收不到数据的，
+ * 所以不能拿"多久没收到数据"当判断依据 —— 那样车会跑几秒自己停。
+ * 现在的规则：
+ *   ① 停车 = 把摇杆拖回中间（有拖动就会上报 0,0）
+ *   ② 手机/云端断开 -> Blinker.connected() 变 false，自动归零
+ *   ③ 串口或主控异常 -> CH32 侧 300ms 链路超时兜底（打印 FAILSAFE）
+ */
 
 BlinkerJoystick JOY(joyKey);
 
@@ -80,8 +88,8 @@ void loop()
 {
 #if !TEST_SWEEP
     Blinker.run();                        // 非阻塞，必须一直调用
-    if (millis() - g_lastRx > LINK_TIMEOUT_MS) {
-        g_x = 0;                          // 手机关了/断网 -> 回中停车
+    if (!Blinker.connected()) {           // 只有"真的断线"才回中，别用"多久没数据"判断
+        g_x = 0;
         g_y = 0;
     }
 #else
