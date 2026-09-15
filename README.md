@@ -1,10 +1,21 @@
-# CH32V307 履带小车（Blinker 手机遥控）
+# LintLizard —— 履带扫地机器人 · 固件仓库
 
 [![build](https://github.com/tw-xy/LintLizard/actions/workflows/build.yml/badge.svg)](https://github.com/tw-xy/LintLizard/actions/workflows/build.yml)
 
-手机虚拟摇杆 → ESP8266 → CH32V307 → 标准差速转向 → 双有刷电调驱动履带底盘。
+> **LintLizard** 是我给这台履带扫地机器人起的名字：**Lint**（毛絮、灰尘）+ **Lizard**（蜥蜴）——
+> 一只贴着地面爬来爬去、专门吃掉毛絮的蜥蜴。
+>
+> 本仓库是它的**固件与文档**，会跟着功能一起长大。目前处于
+> **第一阶段：遥控底盘**；后面依次加入扫地、自动回充、避障导航、状态显示。
+
+```
+手机 Blinker 摇杆 → ESP8266-01S → CH32V307 → 标准差速转向 → 双有刷电调 → 履带底盘
+```
 
 板子：**CH32V307V-EVT**（丝印 `CH32F&V30xV-R1-1v1`，主控 CH32V307VCT6，板载 WCH-Link）
+
+> 仓库名对应的是**整机**（LintLizard），不是当前阶段，所以以后加功能不用改名；
+> 要区分版本时用 `LintLizard-v1` 这种形式。
 
 ## 当前进度
 
