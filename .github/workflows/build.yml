@@ -1,0 +1,66 @@
+name: build
+
+# 方案 B：每次 push / PR 自动把两端都编译一遍，编译不过会在仓库里标红并邮件通知
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    name: CH32V307 firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install RISC-V toolchain (xpack riscv-none-embed-gcc 8.3.0)
+        run: |
+          set -euo pipefail
+          URL="https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v8.3.0-2.3/xpack-riscv-none-embed-gcc-8.3.0-2.3-linux-x64.tar.gz"
+          mkdir -p "$HOME/toolchain"
+          curl -fsSL "$URL" -o /tmp/tc.tar.gz
+          tar -xf /tmp/tc.tar.gz -C "$HOME/toolchain" --strip-components=1
+          echo "$HOME/toolchain/bin" >> "$GITHUB_PATH"
+
+      - name: Build firmware
+        run: bash build.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAR_REMOTE-firmware
+          path: |
+            build/CAR_REMOTE.elf
+            build/CAR_REMOTE.hex
+            build/CAR_REMOTE.bin
+            build/CAR_REMOTE.map
+
+  esp8266:
+    name: ESP8266 sketch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
+            | BINDIR="$HOME/.local/bin" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ESP8266 core and Blinker library
+        run: |
+          set -euo pipefail
+          URLS="https://arduino.esp8266.com/stable/package_esp8266com_index.json"
+          arduino-cli core update-index --additional-urls "$URLS"
+          arduino-cli core install esp8266:esp8266@3.1.2 --additional-urls "$URLS"
+          arduino-cli lib install "Blinker@0.3.10230510"
+
+      - name: Compile sketch
+        run: |
+          set -euo pipefail
+          cp esp8266/ESP8266_Blinker_Joy/secrets.h.example esp8266/ESP8266_Blinker_Joy/secrets.h
+          arduino-cli compile \
+            --fqbn esp8266:esp8266:generic \
+            --board-options "eesz=1M" \
+            esp8266/ESP8266_Blinker_Joy
