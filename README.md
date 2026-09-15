@@ -1,5 +1,7 @@
 # CH32V307 履带小车（Blinker 手机遥控）
 
+[![build](https://github.com/tw-xy/LintLizard/actions/workflows/build.yml/badge.svg)](https://github.com/tw-xy/LintLizard/actions/workflows/build.yml)
+
 手机虚拟摇杆 → ESP8266 → CH32V307 → 标准差速转向 → 双有刷电调驱动履带底盘。
 
 板子：**CH32V307V-EVT**（丝印 `CH32F&V30xV-R1-1v1`，主控 CH32V307VCT6，板载 WCH-Link）
