@@ -23,6 +23,7 @@
 
 #define BLINKER_WIFI
 #include <Blinker.h>
+#include <ESP8266WiFi.h>
 
 /* ==================== 1. 账号信息放在 secrets.h 里（不进 git） ====================
  * 把同目录的 secrets.h.example 复制一份、改名成 secrets.h，填上自己的：
@@ -106,9 +107,14 @@ void loop()
     }
 #endif
 
-    /* 定周期发送，非阻塞 */
+    /* 定周期发送，非阻塞。net = 自己有没有连上 WiFi + 云（给小车上的 OLED 用） */
     if (millis() - g_lastTx >= SEND_PERIOD_MS) {
         g_lastTx = millis();
-        Serial.printf("{\"x\":%d,\"y\":%d}\n", (int)g_x, (int)g_y);
+#if TEST_SWEEP
+        int net = 1;
+#else
+        int net = (WiFi.status() == WL_CONNECTED && Blinker.connected()) ? 1 : 0;
+#endif
+        Serial.printf("{\"x\":%d,\"y\":%d,\"net\":%d}\n", (int)g_x, (int)g_y, net);
     }
 }

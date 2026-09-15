@@ -18,15 +18,19 @@
 #include "app_config.h"
 #include "app_chassis.h"
 #include "app_remote.h"
+#include "app_ui.h"
 #include "bsp_motor.h"
+#include "bsp_oled.h"
 #include "bsp_time.h"
 #include "bsp_uart.h"
 #include "ch32v30x.h"
 
 int main(void)
 {
-    uint32_t tCtrl = 0, tMotor = 0, tDbg = 0, tStat = 0;
+    uint32_t tCtrl = 0, tMotor = 0, tDbg = 0, tStat = 0, tUi = 0;
     uint32_t lastFrames = 0;
+    Ui_Screen_t lastScreen = (Ui_Screen_t)0xFF;
+    Ui_Dir_t    lastDir = (Ui_Dir_t)0xFF;
 
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     SystemCoreClockUpdate();
@@ -45,6 +49,9 @@ int main(void)
                (unsigned int)(1000000u / MOTOR_PWM_PERIOD_US));
     DBG_Printf(" waiting joystick {\"x\":..,\"y\":..}\\n ...\r\n");
     DBG_Printf("========================================\r\n");
+
+    App_Ui_Init();                       /* OLED: 软件I2C(PB6/PB7) + 扫描 + 初始化 */
+    DBG_Printf("[ui  ] OLED SSD1306 ready=%u\r\n", (unsigned int)OLED_IsReady());
 
     while(1)
     {
@@ -92,20 +99,41 @@ int main(void)
                        Chassis_IsFailsafe() ? "FAILSAFE" : "ok");
         }
 
-        /* ---- 5) 1s：统计行（帧率 / 丢帧 / 缓冲溢出） ---- */
+        /* ---- 5) 100ms：OLED 界面（无网络转圈 / 已连接 / 方向箭头） ---- */
+        if(BSP_Every(&tUi, TASK_UI_PERIOD_MS))
+        {
+            App_Ui_Update(BSP_Millis());
+
+            /* 界面内容变化时打一行日志，不看屏也能验证逻辑 */
+            if((App_Ui_GetScreen() != lastScreen) || (App_Ui_GetDirection() != lastDir))
+            {
+                const Remote_State_t *rm = Remote_Get();
+
+                lastScreen = App_Ui_GetScreen();
+                lastDir    = App_Ui_GetDirection();
+                DBG_Printf("[ui  ] screen=%-9s dir=%-10s oled=%u net=%u online=%u\r\n",
+                           App_Ui_ScreenName(lastScreen), App_Ui_DirName(lastDir),
+                           (unsigned int)OLED_IsReady(),
+                           (unsigned int)rm->net, (unsigned int)rm->online);
+            }
+        }
+
+        /* ---- 6) 1s：统计行（帧率 / 丢帧 / OLED / 界面状态） ---- */
         if(BSP_Every(&tStat, TASK_STAT_PERIOD_MS))
         {
             const Remote_State_t *rm = Remote_Get();
             uint32_t fps = rm->frameCount - lastFrames;
 
             lastFrames = rm->frameCount;
-            DBG_Printf("[stat] %s frames=%u (%u/s) err=%u rx=%u rxovf=%u txdrop=%u\r\n",
+            DBG_Printf("[stat] %s frames=%u (%u/s) err=%u rxovf=%u | ui=%-9s dir=%-10s oled=%u net=%u\r\n",
                        rm->online ? "LINK-OK  " : "LINK-LOST",
                        (unsigned int)rm->frameCount, (unsigned int)fps,
                        (unsigned int)rm->errorCount,
-                       (unsigned int)ESP_RxCount(),
                        (unsigned int)ESP_RxOverflow(),
-                       (unsigned int)DBG_TxDropped());
+                       App_Ui_ScreenName(App_Ui_GetScreen()),
+                       App_Ui_DirName(App_Ui_GetDirection()),
+                       (unsigned int)OLED_IsReady(),
+                       (unsigned int)rm->net);
         }
     }
 }

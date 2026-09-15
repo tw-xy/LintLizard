@@ -37,5 +37,10 @@
 #define TASK_MOTOR_PERIOD_MS      20u    /* 20ms 刷新电调（与 50Hz 帧同步） */
 #define TASK_DBG_PERIOD_MS       100u    /* 100ms 打印一次解算结果 */
 #define TASK_STAT_PERIOD_MS     1000u    /* 1s 打印一次统计 */
+#define TASK_UI_PERIOD_MS        100u    /* 100ms 刷新一次 OLED 界面 */
+
+/* ==================== OLED / 界面 ==================== */
+#define UI_CONNECTED_HOLD_MS    3000u    /* "已连接"停留多久后切到方向箭头 */
+#define UI_SPINNER_STEP_MS       150u    /* 转圈图标每格停留多久 */
 
 #endif /* __APP_CONFIG_H */

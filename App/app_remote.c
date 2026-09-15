@@ -49,10 +49,10 @@ static int32_t parse_int(const char *p)
 
 /*********************************************************************
  * @fn      find_field
- * @brief   在 JSON 行里找 "key":<int>
+ * @brief   在 JSON 行里找 "key":<int>（key 支持多字符，比如 "net"）
  * @return  1 = 找到，0 = 没找到
  *********************************************************************/
-static uint8_t find_field(const char *line, char key, int32_t *out)
+static uint8_t find_field(const char *line, const char *key, int32_t *out)
 {
     const char *p = line;
 
@@ -60,27 +60,26 @@ static uint8_t find_field(const char *line, char key, int32_t *out)
     {
         if(*p == '"')
         {
-            p++;
-            if(*p == key)
+            const char *k = p + 1;
+            const char *q = key;
+
+            while(*q != '\0' && *k == *q)
             {
-                p++;
-                if(*p == '"')
+                k++;
+                q++;
+            }
+            if(*q == '\0' && *k == '"')
+            {
+                k++;
+                k = skip_ws(k);
+                if(*k == ':')
                 {
-                    p++;
-                    p = skip_ws(p);
-                    if(*p == ':')
-                    {
-                        p++;
-                        *out = parse_int(p);
-                        return 1;
-                    }
+                    *out = parse_int(k + 1);
+                    return 1;
                 }
             }
         }
-        else
-        {
-            p++;
-        }
+        p++;
     }
     return 0;
 }
@@ -104,7 +103,7 @@ static int16_t clamp100(int32_t v)
  *********************************************************************/
 static void parse_line(uint8_t *line, uint16_t len)
 {
-    int32_t x = 0, y = 0;
+    int32_t x = 0, y = 0, net = 0;
     char   *p;
 
     line[len] = '\0';                     /* s_line 预留了结尾 0 */
@@ -115,7 +114,7 @@ static void parse_line(uint8_t *line, uint16_t len)
         s_remote.errorCount++;
         return;
     }
-    if(!find_field(p, 'x', &x) || !find_field(p, 'y', &y))
+    if(!find_field(p, "x", &x) || !find_field(p, "y", &y))
     {
         s_remote.errorCount++;
         return;
@@ -123,6 +122,10 @@ static void parse_line(uint8_t *line, uint16_t len)
 
     s_remote.x           = clamp100(x);
     s_remote.y           = clamp100(y);
+    if(find_field(p, "net", &net))        /* 可选字段：ESP 报告自己的联网状态 */
+    {
+        s_remote.net = (net != 0) ? 1u : 0u;
+    }
     s_remote.lastValidMs = BSP_Millis();
     s_remote.frameCount++;
     s_remote.online      = 1;
@@ -159,6 +162,7 @@ void Remote_Init(void)
 {
     s_remote.x           = 0;
     s_remote.y           = 0;
+    s_remote.net         = 1;             /* 默认按"已连上"处理（老固件没有 net 字段时） */
     s_remote.online      = 0;
     s_remote.lastValidMs = BSP_Millis();
     s_remote.frameCount  = 0;
