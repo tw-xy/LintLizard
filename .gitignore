@@ -1,0 +1,31 @@
+# ============================================================
+#  本机密钥：WiFi 密码 / Blinker Secret Key —— 任何情况下都不要提交
+# ============================================================
+secrets.h
+**/secrets.h
+
+# 本机 SDK 路径配置
+sdk_path.txt
+
+# 编译产物
+build/
+**/build/
+*.o
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.d
+
+# 串口日志
+logs/
+*.log
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+*.bak
+*~
+Thumbs.db
+desktop.ini
