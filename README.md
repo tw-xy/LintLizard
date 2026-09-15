@@ -38,6 +38,7 @@ User/  Bsp/  App/        CH32V307 固件源码
   App/app_config.h       全部可调参数
 sdk/                     随仓库自带的一份 WCH 官方库（Core/Peripheral/Ld/Startup）
 esp8266/ESP8266_Blinker_Joy/   ESP8266 端 Arduino 工程
+backup/                       出厂固件备份（想恢复出厂时用，见 backup/README.md）
 docs/                    接线表 / 避坑清单 / 编译环境 / 开发日志 / AI 提示词
 build.ps1 flash.ps1 log.ps1    编译 / 烧录 / 串口记录
 ```

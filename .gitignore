@@ -22,6 +22,10 @@ build/
 logs/
 *.log
 
+# 出厂固件备份（唯一例外：允许 *.bin 入库，见 backup/README.md）
+!backup/
+!backup/*.bin
+
 # 编辑器 / 系统
 .vscode/
 .idea/
