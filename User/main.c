@@ -19,6 +19,7 @@
 #include "app_chassis.h"
 #include "app_remote.h"
 #include "app_ui.h"
+#include "app_cleaner.h"
 #include "bsp_motor.h"
 #include "bsp_oled.h"
 #include "bsp_time.h"
@@ -40,6 +41,7 @@ int main(void)
     Remote_Init();
     Chassis_Init();
     Motor_Init();
+    Cleaner_Init();
 
     DBG_Printf("\r\n========================================\r\n");
     DBG_Printf(" CAR_REMOTE  CH32V307VCT6 @ %u Hz\r\n", (unsigned int)SystemCoreClock);
@@ -75,16 +77,22 @@ int main(void)
         if(BSP_Every(&tMotor, TASK_MOTOR_PERIOD_MS))
         {
             const Chassis_Output_t *ch = Chassis_Get();
+            uint8_t moving;
 
             if((BSP_Millis() < MOTOR_ARM_DELAY_MS) || Chassis_IsFailsafe())
             {
                 /* 上电头 3 秒让电调自检/解锁；失控时输出中位（停） */
                 Motor_SetNeutral();
+                moving = 0;
             }
             else
             {
                 Motor_SetPermille(ch->left, ch->right);
+                moving = (uint8_t)((ch->left != 0 || ch->right != 0) ? 1 : 0);
             }
+
+            /* 扫地执行机构：车动 -> 边刷通电 + 吸尘 1250us；车停 2 秒后关 */
+            Cleaner_Task(BSP_Millis(), moving);
         }
 
         /* ---- 4) 100ms：打印解算后的左右电机目标速度 ---- */
@@ -125,7 +133,7 @@ int main(void)
             uint32_t fps = rm->frameCount - lastFrames;
 
             lastFrames = rm->frameCount;
-            DBG_Printf("[stat] %s frames=%u (%u/s) err=%u rxovf=%u | ui=%-9s dir=%-10s oled=%u net=%u\r\n",
+            DBG_Printf("[stat] %s frames=%u (%u/s) err=%u rxovf=%u | ui=%-9s dir=%-10s oled=%u net=%u | clean=%u vac=%u\r\n",
                        rm->online ? "LINK-OK  " : "LINK-LOST",
                        (unsigned int)rm->frameCount, (unsigned int)fps,
                        (unsigned int)rm->errorCount,
@@ -133,7 +141,9 @@ int main(void)
                        App_Ui_ScreenName(App_Ui_GetScreen()),
                        App_Ui_DirName(App_Ui_GetDirection()),
                        (unsigned int)OLED_IsReady(),
-                       (unsigned int)rm->net);
+                       (unsigned int)rm->net,
+                       (unsigned int)Cleaner_IsOn(),
+                       (unsigned int)Cleaner_GetVacuumPulse());
         }
     }
 }
