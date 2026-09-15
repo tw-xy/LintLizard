@@ -44,9 +44,13 @@ jobs:
       - name: Install arduino-cli
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
-            | BINDIR="$HOME/.local/bin" sh
+          # 直接下官方 release 包（install.sh 要求 BINDIR 目录预先存在，容易踩坑）
+          VER=1.5.1
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/arduino/arduino-cli/releases/download/v${VER}/arduino-cli_${VER}_Linux_64bit.tar.gz" -o /tmp/acli.tar.gz
+          tar -xf /tmp/acli.tar.gz -C "$HOME/.local/bin" arduino-cli
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/arduino-cli" version
 
       - name: Install ESP8266 core and Blinker library
         run: |
