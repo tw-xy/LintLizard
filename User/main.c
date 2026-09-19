@@ -133,7 +133,7 @@ int main(void)
             uint32_t fps = rm->frameCount - lastFrames;
 
             lastFrames = rm->frameCount;
-            DBG_Printf("[stat] %s frames=%u (%u/s) err=%u rxovf=%u | ui=%-9s dir=%-10s oled=%u net=%u | clean=%u vac=%u\r\n",
+            DBG_Printf("[stat] %s frames=%u (%u/s) err=%u rxovf=%u | ui=%-9s dir=%-10s oled=%u net=%u | clean=%u fan=%u%%\r\n",
                        rm->online ? "LINK-OK  " : "LINK-LOST",
                        (unsigned int)rm->frameCount, (unsigned int)fps,
                        (unsigned int)rm->errorCount,
@@ -143,7 +143,7 @@ int main(void)
                        (unsigned int)OLED_IsReady(),
                        (unsigned int)rm->net,
                        (unsigned int)Cleaner_IsOn(),
-                       (unsigned int)Cleaner_GetVacuumPulse());
+                       (unsigned int)Cleaner_GetFanDuty());
         }
     }
 }

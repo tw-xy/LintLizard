@@ -12,10 +12,8 @@
 #define MOTOR_TIM          TIM3
 #define MOTOR_LEFT_CH      TIM_Channel_1     /* PA6 */
 #define MOTOR_RIGHT_CH     TIM_Channel_2     /* PA7 */
-#define VACUUM_CH          TIM_Channel_3     /* PB0 = J4 第 17 脚（吸尘电调） */
 
 static volatile uint16_t s_pulse[2] = {MOTOR_PULSE_NEUTRAL, MOTOR_PULSE_NEUTRAL};
-static volatile uint16_t s_vacPulse = MOTOR_PULSE_MIN;
 
 /*********************************************************************
  * @fn      permille_to_pulse
@@ -51,17 +49,13 @@ void Motor_Init(void)
     uint32_t                timClk, psc;
 
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
 
     /* PA6/PA7 复用推挽输出（TIM3 默认映射，不需要重映射） */
     GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_6 | GPIO_Pin_7;
     GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-    /* PB0 = TIM3_CH3：吸尘电调信号 */
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
 
     /* 计数时钟 1MHz -> 1 个计数 = 1us */
     RCC_GetClocksFreq(&clocks);
@@ -88,20 +82,15 @@ void Motor_Init(void)
     TIM_OCInitStructure.TIM_OCPolarity  = TIM_OCPolarity_High;
     TIM_OC1Init(MOTOR_TIM, &TIM_OCInitStructure);
     TIM_OC2Init(MOTOR_TIM, &TIM_OCInitStructure);
-    TIM_OCInitStructure.TIM_Pulse = MOTOR_PULSE_MIN;    /* 吸尘上电先给 0 油门 */
-    TIM_OC3Init(MOTOR_TIM, &TIM_OCInitStructure);
 
     TIM_OC1PreloadConfig(MOTOR_TIM, TIM_OCPreload_Enable);
     TIM_OC2PreloadConfig(MOTOR_TIM, TIM_OCPreload_Enable);
-    TIM_OC3PreloadConfig(MOTOR_TIM, TIM_OCPreload_Enable);
     TIM_ARRPreloadConfig(MOTOR_TIM, ENABLE);
 
     s_pulse[0] = MOTOR_PULSE_NEUTRAL;
     s_pulse[1] = MOTOR_PULSE_NEUTRAL;
     TIM_SetCompare1(MOTOR_TIM, MOTOR_PULSE_NEUTRAL);
     TIM_SetCompare2(MOTOR_TIM, MOTOR_PULSE_NEUTRAL);
-    s_vacPulse = MOTOR_PULSE_MIN;
-    TIM_SetCompare3(MOTOR_TIM, MOTOR_PULSE_MIN);
 
     TIM_Cmd(MOTOR_TIM, ENABLE);
 }
@@ -147,27 +136,4 @@ void Motor_SetNeutral(void)
 uint16_t Motor_GetPulseUs(uint8_t idx)
 {
     return s_pulse[idx & 1u];
-}
-
-/*********************************************************************
- * @fn      Motor_SetVacuumPulse
- * @brief   设置吸尘电调脉宽（µs）：单向电调 1000=停、2000=满速
- *********************************************************************/
-void Motor_SetVacuumPulse(uint16_t pulseUs)
-{
-    if(pulseUs < MOTOR_PULSE_MIN)
-    {
-        pulseUs = MOTOR_PULSE_MIN;
-    }
-    if(pulseUs > MOTOR_PULSE_MAX)
-    {
-        pulseUs = MOTOR_PULSE_MAX;
-    }
-    s_vacPulse = pulseUs;
-    TIM_SetCompare3(MOTOR_TIM, pulseUs);
-}
-
-uint16_t Motor_GetVacuumPulse(void)
-{
-    return s_vacPulse;
 }

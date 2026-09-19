@@ -16,8 +16,4 @@ void     Motor_SetPermille(int16_t left, int16_t right);   /* ±1000‰ */
 void     Motor_SetNeutral(void);                           /* 两路都回中位 */
 uint16_t Motor_GetPulseUs(uint8_t idx);                    /* idx: 0=左 1=右 */
 
-/* 吸尘电调：TIM3_CH3 = PB0 = J4 第 17 脚（与两个驱动电调同一定时器，50Hz） */
-void     Motor_SetVacuumPulse(uint16_t pulseUs);
-uint16_t Motor_GetVacuumPulse(void);
-
 #endif /* __BSP_MOTOR_H */
