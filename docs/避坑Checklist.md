@@ -76,7 +76,25 @@
 - [ ] **第一次测试务必把履带架起来（轮子悬空）**，确认方向再落地。
 - [ ] **电调红线（BEC）绝对不要接进板子**。
 
-## F. 五分钟自检流程（怀疑哪里坏了就按这个走）
+## F. 激光雷达 / WCH-LinkE 串口
+
+- [ ] **EaiLidarTest 显示 `Automatic connection successful`，但一直报 `Lidar disconnection` / `Operation timed out`**
+      先别怀疑雷达。用原始串口读 3 秒：如果收到 **0 字节**，说明电脑根本没接到雷达 Tx，不是解析或波特率问题。
+      X2 的 4P 接口原厂定义是 **M_CTR / GND / Tx / VCC**；以 VCC 为第 1 脚往另一端数就是
+      **VCC / Tx / GND / M_CTR**。第四脚是 **M_CTR 电机调速脚，不是 RXD**，卖家的 `RXD` 标注不可信。
+      正确接法：雷达 `Tx → USB-UART RX`，雷达 `GND → USB-UART GND`，雷达 `VCC → 独立 5V`，
+      `M_CTR → 3.3V`。能读到 `AA 55` 帧头才算通。
+- [ ] **FTDI 回环测试正常，但接雷达还是 0 字节**
+      FTDI 本身大概率没问题，优先怀疑信号线/脚位。换 **WCH-LinkE-R0-1v3** 的串口验证：
+      Windows 识别为 `WCH-Link SERIAL (COM6)`，支持 115200/921600；把雷达 Tx 接 LinkE 的 RX、共地即可。
+      WCH-LinkE 在 MounRiver 安装目录下自带 CDC 驱动：
+      `...\WCH\Others\SWDTool\default\Drv_Link\WCHLinkDrv_WHQL_S.exe`。
+- [ ] **EaiLidarTest 改完型号/串口后仍连错**
+      配置在 `EaiLidarTest\config\config.json`，第一个 `lidars[0]` 才是默认型号。改前先退出软件；
+      X2 用 `baudRate=115200`、`port` 填实际 COM 口。不要把 `crafts[0].motor.port` 设成同一个雷达串口，
+      否则软件可能重复占用。改完后先点 `Start`，看是否出现点云。
+
+## G. 五分钟自检流程（怀疑哪里坏了就按这个走）
 
 1. 插上 USB → 设备管理器看 `WCH-Link SERIAL (COM4)` 状态是否 `OK`
 2. `log.ps1 -Seconds 10` → 有没有 `[stat] LINK-OK`？`frames` 在涨吗？（→ 板子在跑）
