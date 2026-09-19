@@ -16,7 +16,7 @@
 #define DBG_TX_SIZE   512u   /* 必须是 2 的幂 */
 #define ESP_RX_SIZE   256u
 #define ESP_TX_SIZE   256u
-#define RADAR_RX_SIZE 512u
+#define RADAR_RX_SIZE 1024u
 
 typedef struct
 {

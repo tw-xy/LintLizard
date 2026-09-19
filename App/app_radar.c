@@ -106,7 +106,7 @@ void Radar_Task(uint32_t nowMs)
 
         if(s_hasPkt)
         {
-            DBG_Printf("[rad] rx=%u B/s hdr=%u/s | CT=0x%02X 点数=%u 起始角=%u.%02u 结束角=%u.%02u | 累计=%u 溢出=%u\r\n",
+            DBG_Printf("[rad] rx=%u B/s hdr=%u/s | CT=0x%02X pts=%u start=%u.%02u end=%u.%02u | total=%u ovf=%u\r\n",
                        (unsigned int)bps, (unsigned int)hps,
                        (unsigned int)s_ct, (unsigned int)s_lsn,
                        (unsigned int)(s_fsa / 100u), (unsigned int)(s_fsa % 100u),
@@ -115,7 +115,7 @@ void Radar_Task(uint32_t nowMs)
         }
         else
         {
-            DBG_Printf("[rad] rx=%u B/s hdr=%u/s | 还没抓到包头 | 累计=%u 溢出=%u\r\n",
+            DBG_Printf("[rad] rx=%u B/s hdr=%u/s | no header yet | total=%u ovf=%u\r\n",
                        (unsigned int)bps, (unsigned int)hps,
                        (unsigned int)s_bytes, (unsigned int)RADAR_RxOverflow());
         }
