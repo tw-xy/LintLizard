@@ -98,7 +98,28 @@
       若实际装反 180°，在 `App/app_config.h` 把 `AVOID_FRONT_OFFSET_CDEG` 改成 `18000`。
       `front=0` 表示当前窗口没有有效前向回波，不是距离 0mm。
 
-## G. 五分钟自检流程（怀疑哪里坏了就按这个走）
+## G. 树莓派 / 系统刷机
+
+- [ ] **Raspberry Pi Imager 2.0.11.1 写到一半自己退出**
+      现象：Windows 事件日志里 `rpi-imager.exe` 崩在 `libstdc++-6.dll`，异常码 `0x40000015`。
+      解决：改用 **Imager 1.9.6**；系统和缓存镜像都可复用。若还有旧缓存，可直接用
+      `D:\imager\raspios-lite-64bit.img.xz` 作为自定义镜像写入。
+- [ ] **写卡后 Windows 只看到分区，看不到 `bootfs` 盘符**
+      根因：FAT32 bootfs 分区没有自动分配盘符。
+      解决：`Win+X` → 磁盘管理 → 右键 bootfs → 更改驱动器号和路径 → 添加盘符（如 `R:`）。
+- [ ] **树莓派启动后 22 端口关闭**
+      Raspberry Pi OS Lite 默认可能没启用 SSH。
+      解决：HDMI 控制台登录 `pi`，执行 `sudo systemctl enable --now ssh`；用
+      `sudo systemctl is-active ssh` 应显示 `active`。
+- [ ] **`lintlizard.local` ping 到 `198.18.0.x`，SSH 显示 `Connection closed`**
+      根因：Clash TUN fake-IP 把 `.local` 当外网流量代理。
+      解决：直接用真实局域网 IP（本项目是 `192.168.1.213`），或在 Clash 里为
+      `lintlizard.local` / 局域网 `192.168.1.0/24` 加直连规则；ROS2 DDS 更要避免 TUN 干扰。
+- [ ] **Linux 控制台没法输入中文 SSID**
+      根因：控制台没有中文输入法。
+      解决：临时把 2.4G SSID 改成纯英文；或先插网线/用 SSH 进去后从电脑远程配 WiFi。
+
+## H. 五分钟自检流程（怀疑哪里坏了就按这个走）
 
 1. 插上 USB → 设备管理器看 `WCH-Link SERIAL (COM4)` 状态是否 `OK`
 2. `log.ps1 -Seconds 10` → 有没有 `[stat] LINK-OK`？`frames` 在涨吗？（→ 板子在跑）

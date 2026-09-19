@@ -17,6 +17,8 @@
 - Arduino IDE 2.3.10 + esp8266 包 3.1.2 + Blinker 库 0.3.10230510（在 C:\Users\hp\Documents\Arduino\libraries\Blinker）
 - arduino-cli 在 D:\Arduino IDE 2.3.10\resources\app\lib\backend\resources\arduino-cli.exe
 - 代理：ClashVerge 127.0.0.1:7897（Arduino CLI 已经在 %LOCALAPPDATA%\Arduino15\arduino-cli.yaml 里配了 network.proxy）
+- 树莓派刷机：Imager 2.0.11.1 会崩（libstdc++-6.dll, 0x40000015）；改用 Imager 1.9.6；
+  已缓存镜像 D:\imager\raspios-lite-64bit.img.xz（Raspberry Pi OS Lite 64-bit, Trixie）
 
 【项目】履带小车，仓库 D:\WCH_CH32V307_EVT\projects\CAR_REMOTE（也是 git 仓库）
 - 源码：User/（主循环时间片）、Bsp/（bsp_time、bsp_uart 三串口、bsp_motor 电调、bsp_fan 风机、bsp_oled、bsp_syscalls）、
@@ -35,6 +37,9 @@
 - 树莓派阶段：3B+ + 岚山 V1.61 地面端底板；AAT-1 = UART/TTL 3.3V（设计师确认），
   线序 5V/GND/RX/TX，对应 Pi GPIO14/GPIO15；可直接接 CH32 PB10/PB11/GND；
   5V 3A；CSI 摄像头；WCH-LinkE 可当 USB-TTL（Pi 上是 /dev/ttyACM0）
+- 当前树莓派：Raspberry Pi OS Lite 64-bit (Trixie, kernel 6.18.50+rpt-rpi-v8)；
+  Ethernet IP 192.168.1.213，MAC B8:27:EB:F6:89:75，hostname lintlizard；
+  ssh.service 已 active，端口 22 可达；登录密码/公钥待收尾
 - 已占用/别动：PA9/PA10(调试串口)、PA13/PA14(SWD)、PA11/PA12(USB-HS)、PB6/PB7(USB-FS+OLED I2C1)、
   PC6~PC9(内置10M以太网PHY)、PE9/PE7(用户LED)、PD0/PD1(8M晶振)
 
@@ -49,7 +54,9 @@
 - 阶段四（扫地执行机构）✅：边刷 EN + 涡轮风机 18kHz 缓启动，实测通过
 - 阶段五（激光雷达）✅：CH32 侧约 9400 B/s、168 包/秒；PC EaiLidarTest 点云 7.8Hz；
   前向避障实测：1m 满速、45-55cm 降速、≤30cm 停车，有障碍倒车/原地转仍可用，雷达失效前进锁定
-- 待办：落地跑直线/原地转（含避障）→ 雷达上树莓派跑 YDLidar-SDK/建图 → 避障阈值精调
+- 阶段六（树莓派上位机）进行中：系统已刷入、HDMI 登录成功、Ethernet 获取 IP、SSH 已 active；
+  待办：SSH 登录收尾 → WiFi/AAT-1 UART → CH32 转发雷达 → 摄像头 MJPEG + 点云网页 + 虚拟摇杆
+- 待办：落地跑直线/原地转（含避障）→ 避障阈值精调 → 编码器/IMU（暂缓）
 - 架构：非阻塞时间片（BSP_Millis + BSP_Every），串口全中断+环形缓冲，无任何 Delay_Ms
   三层失效保护：ESP 端 1s 无数据回中 → 链路 300ms 判离线 → 底盘 300ms 输出归零
 
@@ -123,6 +130,7 @@
 
 ### 4.4 树莓派阶段待确认
 
-* 底板是否遮挡 Pi 的 CSI 摄像头插座。
-* 5V 3A 在 Pi + 风扇 + CSI 摄像头同时工作时的实际压降。
+* 已完成：系统刷入、Ethernet 网络、SSH service active、AAT-1 3.3V UART 及 GPIO14/15 确认。
+* 待收尾：`pi` 密码/公钥登录；WiFi（中文 SSID 控制台输入不便，可临时用英文 SSID）。
+* 待确认：底板是否遮挡 CSI 插座；5V 3A 带 Pi + 风扇 + CSI 摄像头时的实际压降。
 * 系统侧需要启用 Pi 串口、关闭串口控制台，并用 `dtoverlay=disable-bt` 释放 GPIO14/15 的 PL011 UART。
