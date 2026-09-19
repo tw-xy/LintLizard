@@ -93,6 +93,10 @@
       配置在 `EaiLidarTest\config\config.json`，第一个 `lidars[0]` 才是默认型号。改前先退出软件；
       X2 用 `baudRate=115200`、`port` 填实际 COM 口。不要把 `crafts[0].motor.port` 设成同一个雷达串口，
       否则软件可能重复占用。改完后先点 `Start`，看是否出现点云。
+- [ ] **雷达能读到数据，但避障方向不对**
+      X2 的 0° 零方向是**从旋转中心指向电机/接插件凸出的那一侧**，必须把这侧朝车头。
+      若实际装反 180°，在 `App/app_config.h` 把 `AVOID_FRONT_OFFSET_CDEG` 改成 `18000`。
+      `front=0` 表示当前窗口没有有效前向回波，不是距离 0mm。
 
 ## G. 五分钟自检流程（怀疑哪里坏了就按这个走）
 

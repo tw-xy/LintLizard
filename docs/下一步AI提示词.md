@@ -19,8 +19,8 @@
 - 代理：ClashVerge 127.0.0.1:7897（Arduino CLI 已经在 %LOCALAPPDATA%\Arduino15\arduino-cli.yaml 里配了 network.proxy）
 
 【项目】履带小车，仓库 D:\WCH_CH32V307_EVT\projects\CAR_REMOTE（也是 git 仓库）
-- 源码：User/（主循环）、Bsp/（bsp_time 时基、bsp_uart 双串口、bsp_motor 电调 PWM、bsp_syscalls）、
-        App/（app_remote 协议解析、app_chassis 差速解算、app_config 参数）
+- 源码：User/（主循环时间片）、Bsp/（bsp_time、bsp_uart 三串口、bsp_motor 电调、bsp_fan 风机、bsp_oled、bsp_syscalls）、
+        App/（app_remote 协议、app_chassis 差速、app_cleaner 扫地、app_radar 雷达解析、app_avoid 避障、app_ui 界面、app_config 参数）
 - SDK：仓库自带 sdk/（Core/Peripheral/Ld/Startup）
 - 工具：build.ps1（编译）、flash.ps1（烧录）、log.ps1（录 COM4 日志到 logs\）
 - 文档：docs/接线表.md、docs/避坑Checklist.md、docs/编译环境.md、docs/开发日志.md
@@ -29,6 +29,9 @@
 【接线（已接好）】
 - ESP8266-01S：TX→J4-1(PB10=USART3_TX)、RX→J4-3(PB11=USART3_RX)、GND→J4-7、3V3→独立 3.3V(≥500mA)
 - 电调：左→J4-29(PA6=TIM3_CH1)、右→J4-31(PA7=TIM3_CH2)、两个 GND→J4-7，电调红线(BEC)悬空
+- 激光雷达：X2 Tx→J3-34(PA3=USART2_RX)、GND→板子 GND、VCC→独立5V、M_CTR→3.3V；0°正前方=电机/接插件侧朝车头
+- OLED：SCL→J4-22(PB6)、SDA→J4-20(PB7)、VCC→3.3V、GND→J4-7
+- 扫地：边刷 EN→J3-43(PE8)/J3-45(PE10)，风机 PWM→J4-25(PB8/TIM4_CH3)
 - 已占用/别动：PA9/PA10(调试串口)、PA13/PA14(SWD)、PA11/PA12(USB-HS)、PB6/PB7(USB-FS+OLED I2C1)、
   PC6~PC9(内置10M以太网PHY)、PE9/PE7(用户LED)、PD0/PD1(8M晶振)
 
@@ -37,10 +40,13 @@
   电调脉宽：1500µs=停、2000µs=满前进、1000µs=满倒车（50Hz）
 
 【已实现 / 当前进度】
-- 阶段一（娱乐与遥控）✅：摇杆→ESP→协议解析→差速解算→COM4 打印，方向与失效保护实测通过
-- 阶段二（电调输出）✅ 信号层：TIM3_CH1/CH2 50Hz/1000-2000µs，寄存器级验证 + 推杆实测通过
-  实测：推前 2000/2000µs、推后 1001/1048µs、松手 1500/1500µs
-- 待办：轮子实际转向确认（架起来看四个方向）→ 落地跑直线/原地转
+- 阶段一（遥控）✅：摇杆→ESP→协议→差速解算，方向全对，48帧/秒
+- 阶段二（电调）✅：TIM3_CH1/CH2 50Hz/1000-2000µs，轮子转向已确认
+- 阶段三（OLED）✅：SSD1306 软 I2C，无网络转圈/已连接/方向箭头
+- 阶段四（扫地执行机构）✅：边刷 EN + 涡轮风机 18kHz 缓启动，实测通过
+- 阶段五（激光雷达）✅：CH32 侧约 9400 B/s、168 包/秒；PC EaiLidarTest 点云 7.8Hz；
+  前向避障实测：1m 满速、45-55cm 降速、≤30cm 停车，有障碍倒车/原地转仍可用，雷达失效前进锁定
+- 待办：落地跑直线/原地转（含避障）→ 雷达上树莓派跑 YDLidar-SDK/建图 → 避障阈值精调
 - 架构：非阻塞时间片（BSP_Millis + BSP_Every），串口全中断+环形缓冲，无任何 Delay_Ms
   三层失效保护：ESP 端 1s 无数据回中 → 链路 300ms 判离线 → 底盘 300ms 输出归零
 

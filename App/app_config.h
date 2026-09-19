@@ -47,6 +47,27 @@
 /* ==================== 激光雷达嗅探 ==================== */
 #define RADAR_STAT_PERIOD_MS     500u    /* 每隔多久打一行雷达摘要 */
 
+/* ==================== 激光雷达避障 ==================== */
+/* 第一版先保持 0：只解析点云并打印前向距离，不接管电机。
+ * 距离/方向验证正确后改成 1，烧录即可启用前进限速/停车。 */
+#define AVOID_ENABLE                   1u
+
+/* 雷达安装角度：X2 的 0° 是雷达电机正前方。装车后如果 0° 没朝车头，
+ * 用这个偏移修正。单位：0.01°，例如 90° = 9000。 */
+#define AVOID_FRONT_OFFSET_CDEG        0
+
+#define AVOID_FRONT_HALF_ANGLE_CDEG 2500  /* 前向扇区半角：±25.00° */
+#define AVOID_SIDE_HALF_ANGLE_CDEG  2500  /* 左/右扇区半角：±25.00° */
+
+#define AVOID_STOP_MM                300u /* 小于这个距离：禁止继续前进 */
+#define AVOID_SLOW_MM                600u /* 这个距离内：前进速度线性降低 */
+#define AVOID_MIN_POINTS               3u /* 一个扇区至少这么多有效点才认 */
+#define AVOID_WINDOW_MS              200u /* 点云最小距离保持窗口 */
+#define AVOID_TIMEOUT_MS             300u /* 超过这么久没新包：雷达失效 */
+
+#define AVOID_MIN_VALID_MM           120u /* X2 最小测距 */
+#define AVOID_MAX_VALID_MM          8000u /* X2 最大测距 */
+
 /* ==================== 扫地执行机构（边刷 + 涡轮风机）====================
  * 边刷：两个 12V->5V 降压模块，EN 高电平 -> 输出 5V（PE8 / PE10）
  * 风机：内置驱动的涡轮风机（4 线 VCC/GND/PWM/FG），18kHz 占空比调速

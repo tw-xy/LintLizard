@@ -16,6 +16,7 @@
 *       App/app_chassis.c 差速转向解算
 *******************************************************************************/
 #include "app_config.h"
+#include "app_avoid.h"
 #include "app_chassis.h"
 #include "app_remote.h"
 #include "app_ui.h"
@@ -44,6 +45,7 @@ int main(void)
     Motor_Init();
     Cleaner_Init();
     Radar_Init();
+    Avoid_Init();
 
     DBG_Printf("\r\n========================================\r\n");
     DBG_Printf(" CAR_REMOTE  CH32V307VCT6 @ %u Hz\r\n", (unsigned int)SystemCoreClock);
@@ -67,13 +69,18 @@ int main(void)
         if(BSP_Every(&tCtrl, TASK_CTRL_PERIOD_MS))
         {
             const Remote_State_t *rm = Remote_Get();
+            uint32_t now = BSP_Millis();
 
             if(rm->online)
             {
-                Chassis_SetInput(rm->x, rm->y);
+                int16_t ax;
+                int16_t ay;
+
+                Avoid_Apply(rm->x, rm->y, now, &ax, &ay);
+                Chassis_SetInput(ax, ay);
             }
             /* 掉线时不再喂新输入，Chassis 自己会在 CHASSIS_INPUT_TIMEOUT_MS 后归零 */
-            Chassis_Update(BSP_Millis());
+            Chassis_Update(now);
         }
 
         /* ---- 3) 20ms：把解算结果写到电调 PWM ---- */
@@ -103,9 +110,12 @@ int main(void)
         {
             const Remote_State_t   *rm = Remote_Get();
             const Chassis_Output_t *ch = Chassis_Get();
+            uint16_t front = Avoid_GetFrontMm();
 
-            DBG_Printf("[cmd ] x=%+4d y=%+4d | L=%+5d R=%+5d | %4u/%4u us | %s\r\n",
+            DBG_Printf("[cmd ] x=%+4d y=%+4d | L=%+5d R=%+5d | front=%4u mm | avoid=%-5s | %4u/%4u us | %s\r\n",
                        rm->x, rm->y, ch->left, ch->right,
+                       (front == 0xFFFFu) ? 0u : front,
+                       Avoid_StateName(Avoid_GetState()),
                        (unsigned int)Motor_GetPulseUs(0), (unsigned int)Motor_GetPulseUs(1),
                        Chassis_IsFailsafe() ? "FAILSAFE" : "ok");
         }
