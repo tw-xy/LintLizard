@@ -68,6 +68,24 @@
 #define AVOID_MIN_VALID_MM           120u /* X2 最小测距 */
 #define AVOID_MAX_VALID_MM          8000u /* X2 最大测距 */
 
+/* ==================== 自动巡航特别版 ==================== */
+/* 上电不直接跑；推摇杆并回中后才进入自动巡航。
+ * 自动模式仅依赖雷达前/左/右扇区，速度故意压低，便于测试安全。 */
+#define ROAM_ENABLE                   1u
+#define ROAM_FWD_PERMILLE           400   /* 前方畅通时前进速度 */
+#define ROAM_SLOW_PERMILLE          200   /* 前方 300~600mm 时的前进分量 */
+#define ROAM_SLOW_TURN_PERMILLE     350   /* 慢速绕障时的转向分量 */
+#define ROAM_PIVOT_PERMILLE         500   /* 原地转向分量 */
+#define ROAM_BACK_PERMILLE          300   /* 后退脱困速度 */
+#define ROAM_TURN_MS                700u  /* 每次转向持续时间 */
+#define ROAM_BACK_MS                500u  /* 连续两次转向仍被挡时后退时间 */
+#define ROAM_CLEAR_MM               600u  /* 前方大于此值视为畅通 */
+#define ROAM_MAX_TURN_ATTEMPTS         2u /* 同一障碍最多尝试两次转向 */
+#define ROAM_MANUAL_THRESH            25  /* 摇杆超过这个值视为手动接管 */
+#define ROAM_MANUAL_HOLD_MS         1500u /* 松手后多久恢复自动 */
+#define ROAM_DISARM_Y                -80  /* 摇杆向下拉到底：解除自动并停车 */
+#define ROAM_DISARM_X                 30  /* 解除手势要求 X 接近中位 */
+
 /* ==================== 扫地执行机构（边刷 + 涡轮风机）====================
  * 边刷：两个 12V->5V 降压模块，EN 高电平 -> 输出 5V（PE8 / PE10）
  * 风机：内置驱动的涡轮风机（4 线 VCC/GND/PWM/FG），18kHz 占空比调速

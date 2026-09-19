@@ -19,6 +19,7 @@
 #include "app_avoid.h"
 #include "app_chassis.h"
 #include "app_remote.h"
+#include "app_roam.h"
 #include "app_ui.h"
 #include "app_cleaner.h"
 #include "app_radar.h"
@@ -46,6 +47,7 @@ int main(void)
     Cleaner_Init();
     Radar_Init();
     Avoid_Init();
+    Roam_Init();
 
     DBG_Printf("\r\n========================================\r\n");
     DBG_Printf(" CAR_REMOTE  CH32V307VCT6 @ %u Hz\r\n", (unsigned int)SystemCoreClock);
@@ -71,6 +73,18 @@ int main(void)
             const Remote_State_t *rm = Remote_Get();
             uint32_t now = BSP_Millis();
 
+#if ROAM_ENABLE
+            {
+                int16_t rx;
+                int16_t ry;
+                int16_t ax;
+                int16_t ay;
+
+                Roam_Update(now, rm, &rx, &ry);
+                Avoid_Apply(rx, ry, now, &ax, &ay);
+                Chassis_SetInput(ax, ay);
+            }
+#else
             if(rm->online)
             {
                 int16_t ax;
@@ -79,6 +93,7 @@ int main(void)
                 Avoid_Apply(rm->x, rm->y, now, &ax, &ay);
                 Chassis_SetInput(ax, ay);
             }
+#endif
             /* 掉线时不再喂新输入，Chassis 自己会在 CHASSIS_INPUT_TIMEOUT_MS 后归零 */
             Chassis_Update(now);
         }
@@ -112,10 +127,11 @@ int main(void)
             const Chassis_Output_t *ch = Chassis_Get();
             uint16_t front = Avoid_GetFrontMm();
 
-            DBG_Printf("[cmd ] x=%+4d y=%+4d | L=%+5d R=%+5d | front=%4u mm | avoid=%-5s | %4u/%4u us | %s\r\n",
+            DBG_Printf("[cmd ] x=%+4d y=%+4d | L=%+5d R=%+5d | front=%4u mm | avoid=%-5s | roam=%-6s | %4u/%4u us | %s\r\n",
                        rm->x, rm->y, ch->left, ch->right,
                        (front == 0xFFFFu) ? 0u : front,
                        Avoid_StateName(Avoid_GetState()),
+                       Roam_StateName(Roam_GetState()),
                        (unsigned int)Motor_GetPulseUs(0), (unsigned int)Motor_GetPulseUs(1),
                        Chassis_IsFailsafe() ? "FAILSAFE" : "ok");
         }
