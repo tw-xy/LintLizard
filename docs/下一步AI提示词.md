@@ -33,7 +33,8 @@
 - OLED：SCL→J4-22(PB6)、SDA→J4-20(PB7)、VCC→3.3V、GND→J4-7
 - 扫地：边刷 EN→J3-43(PE8)/J3-45(PE10)，风机 PWM→J4-25(PB8/TIM4_CH3)
 - 树莓派阶段：3B+ + 岚山 V1.61 地面端底板；AAT-1 = UART/TTL 3.3V（设计师确认），
-  可直接接 CH32 PB10/PB11/GND；5V 3A；CSI 摄像头；WCH-LinkE 可当 USB-TTL（Pi 上是 /dev/ttyACM0）
+  线序 5V/GND/RX/TX，对应 Pi GPIO14/GPIO15；可直接接 CH32 PB10/PB11/GND；
+  5V 3A；CSI 摄像头；WCH-LinkE 可当 USB-TTL（Pi 上是 /dev/ttyACM0）
 - 已占用/别动：PA9/PA10(调试串口)、PA13/PA14(SWD)、PA11/PA12(USB-HS)、PB6/PB7(USB-FS+OLED I2C1)、
   PC6~PC9(内置10M以太网PHY)、PE9/PE7(用户LED)、PD0/PD1(8M晶振)
 
@@ -122,7 +123,6 @@
 
 ### 4.4 树莓派阶段待确认
 
-* AAT-1 4P 插头的具体脚序（VCC/GND/TX/RX）。
-* AAT-1 背后是 Pi 的 GPIO14/15 UART，还是板载 USB 转串口芯片。
 * 底板是否遮挡 Pi 的 CSI 摄像头插座。
 * 5V 3A 在 Pi + 风扇 + CSI 摄像头同时工作时的实际压降。
+* 系统侧需要启用 Pi 串口、关闭串口控制台，并用 `dtoverlay=disable-bt` 释放 GPIO14/15 的 PL011 UART。
