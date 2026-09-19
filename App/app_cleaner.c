@@ -119,7 +119,8 @@ void Cleaner_Task(uint32_t nowMs, uint8_t moving)
             return;
         }
         s_armed = 1;
-        s_lastMoveMs = nowMs;
+        /* 视为"很久以前就停了"，否则上电瞬间会被当成"刚停下"而误开扫地 */
+        s_lastMoveMs = (uint32_t)(nowMs - SWEEP_HOLD_MS);
         s_tFanRamp = nowMs;
     }
 
