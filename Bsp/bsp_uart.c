@@ -16,6 +16,7 @@
 #define DBG_TX_SIZE   512u   /* 必须是 2 的幂 */
 #define ESP_RX_SIZE   256u
 #define ESP_TX_SIZE   256u
+#define RADAR_RX_SIZE 512u
 
 typedef struct
 {
@@ -29,12 +30,15 @@ typedef struct
 static uint8_t s_dbgTxBuf[DBG_TX_SIZE];
 static uint8_t s_espRxBuf[ESP_RX_SIZE];
 static uint8_t s_espTxBuf[ESP_TX_SIZE];
+static uint8_t s_radarRxBuf[RADAR_RX_SIZE];
 
 static ring_t s_dbgTx = {s_dbgTxBuf, DBG_TX_SIZE - 1u, 0, 0, 0};
 static ring_t s_espRx = {s_espRxBuf, ESP_RX_SIZE - 1u, 0, 0, 0};
 static ring_t s_espTx = {s_espTxBuf, ESP_TX_SIZE - 1u, 0, 0, 0};
+static ring_t s_radarRx = {s_radarRxBuf, RADAR_RX_SIZE - 1u, 0, 0, 0};
 
 static volatile uint32_t s_espRxCount = 0;
+static volatile uint32_t s_radarRxCount = 0;
 
 static uint16_t ring_count(const ring_t *r)
 {
@@ -75,6 +79,7 @@ static void ring_put_buf(ring_t *r, const uint8_t *src, uint16_t len)
 /* ============================ 中断服务 ============================ */
 void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void USART3_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void USART2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 
 /*********************************************************************
  * @fn      USART1_IRQHandler
@@ -94,6 +99,23 @@ void USART1_IRQHandler(void)
         {
             USART_ITConfig(USART1, USART_IT_TXE, DISABLE);
         }
+    }
+}
+
+/*********************************************************************
+ * @fn      USART2_IRQHandler
+ * @brief   雷达口：只收（雷达的数据流），进环形缓冲
+ *********************************************************************/
+void USART2_IRQHandler(void)
+{
+    if(USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
+    {
+        ring_put(&s_radarRx, (uint8_t)USART_ReceiveData(USART2));
+        s_radarRxCount++;
+    }
+    if(USART_GetFlagStatus(USART2, USART_FLAG_ORE) != RESET)
+    {
+        (void)USART_ReceiveData(USART2);
     }
 }
 
@@ -202,10 +224,48 @@ static void esp_uart_init(void)
     NVIC_Init(&NVIC_InitStructure);
 }
 
+static void radar_uart_init(void)
+{
+    GPIO_InitTypeDef  GPIO_InitStructure = {0};
+    USART_InitTypeDef USART_InitStructure = {0};
+    NVIC_InitTypeDef  NVIC_InitStructure = {0};
+
+    /* USART2 默认映射：TX = PA2，RX = PA3（J3 第 32 / 34 脚） */
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_2;              /* USART2_TX */
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_PP;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_3;               /* USART2_RX <- 雷达 TXD */
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    USART_InitStructure.USART_BaudRate            = RADAR_UART_BAUD;
+    USART_InitStructure.USART_WordLength          = USART_WordLength_8b;
+    USART_InitStructure.USART_StopBits            = USART_StopBits_1;
+    USART_InitStructure.USART_Parity              = USART_Parity_No;
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStructure.USART_Mode                = USART_Mode_Tx | USART_Mode_Rx;
+    USART_Init(USART2, &USART_InitStructure);
+
+    USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+    USART_Cmd(USART2, ENABLE);
+
+    NVIC_InitStructure.NVIC_IRQChannel                   = USART2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 1;
+    NVIC_InitStructure.NVIC_IRQChannelCmd                = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}
+
 void BSP_Uart_Init(void)
 {
     dbg_uart_init();
     esp_uart_init();
+    radar_uart_init();
 }
 
 /* ============================ 调试口 API ============================ */
@@ -274,4 +334,30 @@ uint32_t ESP_RxOverflow(void)
 uint32_t ESP_RxCount(void)
 {
     return s_espRxCount;
+}
+
+/* ============================ 雷达口 API（USART2） ============================ */
+uint16_t RADAR_Read(uint8_t *dst, uint16_t maxLen)
+{
+    uint16_t n = 0;
+
+    while(n < maxLen)
+    {
+        if(!ring_get(&s_radarRx, &dst[n]))
+        {
+            break;
+        }
+        n++;
+    }
+    return n;
+}
+
+uint32_t RADAR_RxCount(void)
+{
+    return s_radarRxCount;
+}
+
+uint32_t RADAR_RxOverflow(void)
+{
+    return s_radarRx.overflow;
 }

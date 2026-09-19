@@ -20,6 +20,7 @@
 #include "app_remote.h"
 #include "app_ui.h"
 #include "app_cleaner.h"
+#include "app_radar.h"
 #include "bsp_motor.h"
 #include "bsp_oled.h"
 #include "bsp_time.h"
@@ -42,6 +43,7 @@ int main(void)
     Chassis_Init();
     Motor_Init();
     Cleaner_Init();
+    Radar_Init();
 
     DBG_Printf("\r\n========================================\r\n");
     DBG_Printf(" CAR_REMOTE  CH32V307VCT6 @ %u Hz\r\n", (unsigned int)SystemCoreClock);
@@ -59,6 +61,7 @@ int main(void)
     {
         /* ---- 1) 收：把 ESP 的字节全部喂进协议解析器（随时可调，不阻塞） ---- */
         Remote_Poll();
+        Radar_Task(BSP_Millis());        /* 激光雷达嗅探：每 0.5s 打一行摘要 */
 
         /* ---- 2) 10ms：差速解算时间片 ---- */
         if(BSP_Every(&tCtrl, TASK_CTRL_PERIOD_MS))

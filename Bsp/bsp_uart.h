@@ -21,4 +21,9 @@ uint16_t ESP_Write(const uint8_t *src, uint16_t len);
 uint32_t ESP_RxOverflow(void);
 uint32_t ESP_RxCount(void);
 
+/* ---- USART2：雷达口（PA2=TX / PA3=RX = J3 第 32 / 34 脚）---- */
+uint16_t RADAR_Read(uint8_t *dst, uint16_t maxLen);
+uint32_t RADAR_RxCount(void);
+uint32_t RADAR_RxOverflow(void);
+
 #endif /* __BSP_UART_H */
