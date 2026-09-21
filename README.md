@@ -27,7 +27,7 @@
 | 三、OLED 状态显示（SSD1306 软 I2C） | ✅ 已烧录并跑通状态机；屏幕观感待确认 |
 | 四、扫地执行机构（边刷 EN + 涡轮风机缓启动） | ✅ 已实测 |
 | 五、激光雷达（YDLIDAR X2 兼容） | ✅ CH32 数据链路 + PC 端 EaiLidarTest 点云 + 前向避障均已验证 |
-| 六、树莓派上位机 | 🔄 Raspberry Pi OS Lite 已刷入；Ethernet + SSH 已通；WiFi、AAT-1 串口、摄像头/点云网页进行中 |
+| 六、树莓派上位机（Web 控制台） | ✅ WiFi + SSH 免密 + AAT-1 串口 + 摄像头 MJPEG 已通，网页摇杆实测可控；**点云待 CH32 固件转发雷达数据** |
 | 后续 | 落地跑直线/原地转 / 避障阈值精调 / 树莓派建图 / 编码器闭环（架构已预留接口） |
 
 ## 目录结构
@@ -43,6 +43,10 @@ User/  Bsp/  App/        CH32V307 固件源码
   App/app_config.h       全部可调参数
 sdk/                     随仓库自带的一份 WCH 官方库（Core/Peripheral/Ld/Startup）
 esp8266/ESP8266_Blinker_Joy/   ESP8266 端 Arduino 工程
+pi/                       树莓派上位机 Web 控制台（摇杆 + MJPEG 摄像头 + 点云）
+  pi/server.py            纯标准库 HTTP 服务：/cmd → /dev/serial0、/video MJPEG
+  pi/lintlizard-web.service  systemd 开机自启
+  pi/README.md             部署与排查
 backup/                       出厂固件备份（想恢复出厂时用，见 backup/README.md）
 docs/                    接线表 / 避坑清单 / 编译环境 / 开发日志 / AI 提示词
 build.ps1 flash.ps1 log.ps1    编译 / 烧录 / 串口记录
