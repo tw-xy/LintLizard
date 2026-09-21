@@ -123,6 +123,12 @@
 - [ ] **Linux 控制台没法输入中文 SSID**
       根因：控制台没有中文输入法。
       解决：临时把 2.4G SSID 改成纯英文；或先插网线/用 SSH 进去后从电脑远程配 WiFi。
+- [ ] **树莓派 `/dev/ttyAMA0`、`/dev/ttyS0` 都不存在，串口用不了**
+      根因：GPIO14/15 的 UART 默认没开（`serial0` 被蓝牙占用）。
+      解决：`/boot/firmware/config.txt` 末尾（`[all]` 段）加两行 `enable_uart=1` 和
+      `dtoverlay=disable-bt`；再把 `/boot/firmware/cmdline.txt` 里的 `console=serial0,115200` 删掉；重启后
+      `/dev/serial0 -> ttyAMA0`（PL011，波特率稳定）。Pi 用户需在 `dialout` 组（默认已在）。
+      实测：115200 8N1、无流控，`/dev/serial0` 直写即可。
 
 ## H. 五分钟自检流程（怀疑哪里坏了就按这个走）
 
