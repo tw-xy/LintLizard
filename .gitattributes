@@ -4,3 +4,6 @@
 *.ino text eol=lf
 *.S   text eol=lf
 *.md  text eol=lf
+*.sh     text eol=lf
+*.py     text eol=lf
+*.service text eol=lf
