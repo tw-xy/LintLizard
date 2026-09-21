@@ -1,0 +1,16 @@
+[Unit]
+Description=LintLizard Pi web control (joystick + camera + radar)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/pi/lintlizard-server.py
+WorkingDirectory=/home/pi
+Restart=always
+RestartSec=3
+User=pi
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target
