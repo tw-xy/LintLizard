@@ -81,6 +81,17 @@ void Roam_Update(uint32_t nowMs, const Remote_State_t *rm,
         return;
     }
 
+    /* Web controls: releasing input must stay stopped; full reverse is reverse. */
+    if(rm->manual)
+    {
+        s_armed = 0;
+        s_state = (rm->x != 0 || rm->y != 0) ? ROAM_MANUAL : ROAM_IDLE;
+        s_manualUntilMs = nowMs;
+        *outX = rm->x;
+        *outY = rm->y;
+        return;
+    }
+
     /* ---- 急停手势：摇杆向下拉到底 -> 解除自动并停车 ---- */
     if(rm->y <= ROAM_DISARM_Y && iabs16(rm->x) < ROAM_DISARM_X)
     {

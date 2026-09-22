@@ -5,7 +5,7 @@ LintLizard 树莓派上位机 Web 控制服务（纯标准库，无需 pip / 无
 
 接口：
   GET /                     控制界面（虚拟摇杆 + 摄像头 + 点云）
-  GET /cmd?x=&y=            运动指令 -> 写 {"x":-100..100,"y":-100..100}\n 到串口
+  GET /cmd?x=&y=            运动指令 -> 写 {"x":-100..100,"y":-100..100,"manual":1}\n
   GET /video                摄像头 MJPEG 流（rpicam-vid 编码）
   GET /scan                 雷达点云 JSON（角度 ° / 距离 mm）
   GET /status               状态 JSON
@@ -59,6 +59,7 @@ class SerialLink:
         self.last_error = None
         self.stopped = True
         self.last_open_attempt = None
+        self.command_sequences = {}
         self._open()
 
     def _open(self):
@@ -110,11 +111,18 @@ class SerialLink:
                 self.fd = None
                 return None
 
-    def send(self, x, y):
+    def send(self, x, y, session=None, sequence=None):
         x = max(-100, min(100, int(x)))
         y = max(-100, min(100, int(y)))
-        payload = ('{"x":%d,"y":%d}\n' % (x, y)).encode("ascii")
+        payload = ('{"x":%d,"y":%d,"manual":1}\n' % (x, y)).encode("ascii")
         with self.lock:
+            if session is not None:
+                if sequence <= self.command_sequences.get(session, -1):
+                    return False
+                # Bound storage for old browser sessions. No timestamps from clients.
+                if session not in self.command_sequences and len(self.command_sequences) >= 32:
+                    del self.command_sequences[next(iter(self.command_sequences))]
+                self.command_sequences[session] = sequence
             if self.fd is None:
                 self._open()
             if self.fd is None:
@@ -143,7 +151,7 @@ class SerialLink:
                     continue
                 if time.time() - self.last_write > CMD_ZERO_TIMEOUT:
                     try:
-                        os.write(self.fd, b'{"x":0,"y":0}\n')
+                        os.write(self.fd, b'{"x":0,"y":0,"manual":1}\n')
                         self.tx_count += 1
                     except Exception:
                         pass
@@ -333,6 +341,16 @@ INDEX_HTML = r"""<!doctype html>
   #cam{width:100%;height:100%;object-fit:contain;background:#000;border-radius:6px}
   #scan{width:100%;height:100%;background:#0d1117;border-radius:6px}
   .muted{color:#8b949e;font-size:12px}
+  .keyboard{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;padding:10px 0}
+  .keys{display:grid;grid-template-columns:repeat(3,34px);gap:5px}
+  kbd{display:flex;align-items:center;justify-content:center;height:30px;background:#0d1117;
+      border:1px solid #30363d;border-radius:6px;font:600 14px monospace;color:#8b949e}
+  kbd[data-code="KeyW"]{grid-column:2}
+  kbd[data-code="KeyA"]{grid-column:1}
+  kbd.active{background:#238636;color:#fff;border-color:#4ade80}
+  .keyboard label{display:block;margin:6px 0;color:#c9d1d9;font-size:12px}
+  #keySpeed{width:120px;vertical-align:middle;accent-color:#4ade80}
+  #stop{border:1px solid #da3633;background:#501d20;color:#ffb4ad;border-radius:6px;padding:7px 16px;cursor:pointer}
   @media (max-width:820px){
     main{grid-template-columns:1fr;grid-template-rows:1.25fr 1fr}
     .right{grid-template-rows:1fr 1fr}
@@ -348,9 +366,20 @@ INDEX_HTML = r"""<!doctype html>
 </header>
 <main>
   <section class="card">
-    <h3>虚拟摇杆（上=前进 下=后退 左右=转向）</h3>
+    <h3>手动驾驶 · 虚拟摇杆 / W A S D</h3>
     <div id="padWrap"><canvas id="pad" width="320" height="320"></canvas></div>
-    <div class="muted">按住拖动；松手自动回中</div>
+    <div class="keyboard">
+      <div class="keys" aria-label="键盘方向键">
+        <kbd data-code="KeyW">W</kbd><kbd data-code="KeyA">A</kbd>
+        <kbd data-code="KeyS">S</kbd><kbd data-code="KeyD">D</kbd>
+      </div>
+      <div>
+        <div class="muted">W 前进 · S 后退 · A 左转 · D 右转<br>支持组合键；松开停车，切走窗口停车</div>
+        <label>键盘速度 <input id="keySpeed" type="range" min="20" max="100" step="10" value="50" aria-label="键盘速度"> <span id="speedValue">50%</span></label>
+        <button id="stop" type="button">停车 · 空格</button>
+      </div>
+    </div>
+    <div class="muted" id="inputState">点击页面后用键盘，或按住摇杆拖动</div>
   </section>
   <section class="right">
     <div class="card">
@@ -372,6 +401,15 @@ const R = pad.width / 2;
 let knob = {x:0, y:0};
 let dragging = false;
 let lastSend = 0;
+let pointerId = null;
+const heldKeys = new Set();
+const driveKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
+const keySpeed = document.getElementById('keySpeed');
+const inputState = document.getElementById('inputState');
+let sending = false;
+let pending = null;
+const controlSession = Date.now().toString(36) + Math.random().toString(36).slice(2);
+let commandSequence = 0;
 
 function drawPad(){
   ctx.clearRect(0,0,pad.width,pad.height);
@@ -382,11 +420,44 @@ function drawPad(){
   ctx.moveTo(6,R); ctx.lineTo(pad.width-6,R); ctx.stroke();
   const kx = R + knob.x * (R-24), ky = R + knob.y * (R-24);
   ctx.beginPath(); ctx.arc(kx,ky,22,0,Math.PI*2);
-  ctx.fillStyle = dragging ? '#4ade80' : '#2ea043'; ctx.fill();
+  ctx.fillStyle = dragging || heldKeys.size ? '#4ade80' : '#2ea043'; ctx.fill();
 }
 
 function toCmd(x, y){
   return {x: Math.round(x*100), y: Math.round(-y*100)};
+}
+
+async function flushCommand(){
+  // Coalesce pending movement; server sequence checks reject late old requests.
+  if (sending || !pending) return;
+  const command = pending;
+  pending = null;
+  sending = true;
+  let delivered = false;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 250);
+  try {
+    const r = await fetch('/cmd?x=' + command.x + '&y=' + command.y +
+                          '&session=' + controlSession + '&seq=' + (++commandSequence),
+                          {signal:abort.signal, cache:'no-store', keepalive:true});
+    const reply = await r.json();
+    if (!r.ok || !reply.ok) throw new Error('serial unavailable');
+    conn.textContent = '已连接 · 串口正常';
+    conn.style.color = '#4ade80';
+    delivered = true;
+  } catch(e){
+    conn.textContent = '连接断开';
+    conn.style.color = '#f85149';
+    // Do not keep retrying a held drive command after a network failure.
+    clearControls();
+    pending = {x:0, y:0};
+  } finally {
+    clearTimeout(timer);
+    sending = false;
+  }
+  // A release/blur during an in-flight command still sends its stop while hidden.
+  // Retry a failed movement once with zero; a failed zero waits for the heartbeat.
+  if (pending && (delivered || command.x || command.y)) flushCommand();
 }
 
 function send(force){
@@ -395,13 +466,8 @@ function send(force){
   lastSend = now;
   const c = toCmd(knob.x, knob.y);
   vals.textContent = 'x=' + c.x + ' y=' + c.y;
-  fetch('/cmd?x=' + c.x + '&y=' + c.y).then(function(){
-    conn.textContent = '已连接 · 串口正常';
-    conn.style.color = '#4ade80';
-  }).catch(function(){
-    conn.textContent = '连接断开';
-    conn.style.color = '#f85149';
-  });
+  pending = c;
+  flushCommand();
 }
 
 function pos(e){
@@ -414,16 +480,71 @@ function pos(e){
   knob.x = dx; knob.y = dy;
 }
 
-function down(e){ dragging = true; pos(e); drawPad(); send(true); e.preventDefault(); }
-function move(e){ if (dragging){ pos(e); drawPad(); send(false); e.preventDefault(); } }
-function up(){ dragging = false; knob.x = 0; knob.y = 0; drawPad(); send(true); }
-
-pad.addEventListener('mousedown', down);
-window.addEventListener('mousemove', move);
-window.addEventListener('mouseup', up);
-pad.addEventListener('touchstart', down, {passive:false});
-window.addEventListener('touchmove', move, {passive:false});
-window.addEventListener('touchend', up);
+function showKeys(){
+  document.querySelectorAll('kbd[data-code]').forEach(el =>
+    el.classList.toggle('active', heldKeys.has(el.dataset.code)));
+}
+function clearControls(){
+  heldKeys.clear();
+  dragging = false;
+  const oldPointer = pointerId;
+  pointerId = null;
+  if (oldPointer !== null && pad.hasPointerCapture(oldPointer)) pad.releasePointerCapture(oldPointer);
+  knob = {x:0, y:0};
+  vals.textContent = 'x=0 y=0';
+  inputState.textContent = '已停车 · 按住方向键或拖动摇杆驾驶';
+  showKeys(); drawPad();
+}
+function stopControls(){ clearControls(); send(true); }
+function keyboardInput(){
+  let x = Number(heldKeys.has('KeyD')) - Number(heldKeys.has('KeyA'));
+  let y = Number(heldKeys.has('KeyS')) - Number(heldKeys.has('KeyW'));
+  const scale = Number(keySpeed.value) / 100 / Math.max(1, Math.hypot(x,y));
+  knob = {x:x*scale, y:y*scale};
+  inputState.textContent = heldKeys.size ? '键盘驾驶 · 松开停车' : '已停车 · 按住方向键驾驶';
+  showKeys(); drawPad(); send(true);
+}
+function editable(target){
+  return target && target.closest && target.closest('input,textarea,select,[contenteditable]');
+}
+window.addEventListener('keydown', function(e){
+  if (e.ctrlKey || e.altKey || e.metaKey){
+    if (heldKeys.size || dragging) stopControls();
+    return;
+  }
+  if (e.code === 'Space' || e.code === 'Escape'){
+    e.preventDefault(); stopControls(); return;
+  }
+  if (!driveKeys.has(e.code) || editable(e.target) || document.hidden) return;
+  e.preventDefault();
+  if (e.repeat || heldKeys.has(e.code)) return;
+  if (dragging) clearControls();
+  heldKeys.add(e.code); keyboardInput();
+});
+window.addEventListener('keyup', function(e){
+  if (!heldKeys.has(e.code)) return;
+  e.preventDefault(); heldKeys.delete(e.code); keyboardInput();
+});
+keySpeed.addEventListener('input', function(){
+  document.getElementById('speedValue').textContent = keySpeed.value + '%';
+  if (heldKeys.size) keyboardInput();
+});
+document.getElementById('stop').addEventListener('click', stopControls);
+window.addEventListener('blur', stopControls);
+window.addEventListener('pagehide', stopControls);
+document.addEventListener('visibilitychange', function(){ if (document.hidden) stopControls(); });
+pad.addEventListener('pointerdown', function(e){
+  if (e.button !== 0 || dragging) return;
+  clearControls(); dragging = true; pointerId = e.pointerId;
+  pad.setPointerCapture(pointerId);
+  inputState.textContent = '摇杆驾驶 · 松手停车';
+  pos(e); drawPad(); send(true); e.preventDefault();
+});
+pad.addEventListener('pointermove', function(e){
+  if (dragging && e.pointerId === pointerId){ pos(e); drawPad(); send(false); e.preventDefault(); }
+});
+['pointerup','pointercancel','lostpointercapture'].forEach(name =>
+  pad.addEventListener(name, function(e){ if (e.pointerId === pointerId) stopControls(); }));
 
 const scan = document.getElementById('scan');
 const sctx = scan.getContext('2d');
@@ -462,7 +583,7 @@ async function pollScan(){
 
 drawPad();
 pollScan();
-setInterval(function(){ if (!dragging) send(true); }, 300);
+setInterval(function(){ if (!document.hidden) send(true); }, 100);
 </script>
 </body>
 </html>
@@ -502,10 +623,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 x = int(query.get("x", ["0"])[0])
                 y = int(query.get("y", ["0"])[0])
+                session = query.get("session", [None])[0]
+                sequence = int(query.get("seq", ["-1"])[0]) if session is not None else None
+                if session is not None and (not session or len(session) > 64 or sequence < 0):
+                    raise ValueError("invalid command sequence")
             except ValueError:
-                self._json({"ok": False, "error": "x/y 必须是整数"}, 400)
+                self._json({"ok": False, "error": "指令参数无效"}, 400)
                 return
-            ok = SERIAL.send(x, y)
+            ok = SERIAL.send(x, y, session, sequence)
             self._json({"ok": ok, "x": x, "y": y, "tx": SERIAL.tx_count})
 
         elif path == "/status":

@@ -14,10 +14,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test Pi parser, serial and HTTP
         run: python3 -m unittest discover -s pi -v
+      - name: Test keyboard and joystick controller
+        run: node pi/test_controls.js
       - name: Test CH32 parser on host
         run: |
           gcc -std=c99 -Wall -Wextra -IApp -IBsp tests/radar_stream_test.c App/app_radar.c -o /tmp/radar_stream_test
           /tmp/radar_stream_test
+          gcc -std=c99 -Wall -Wextra -IApp -IBsp tests/manual_control_test.c App/app_remote.c App/app_roam.c -o /tmp/manual_control_test
+          /tmp/manual_control_test
 
   firmware:
     name: CH32V307 firmware

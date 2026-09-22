@@ -103,7 +103,7 @@ static int16_t clamp100(int32_t v)
  *********************************************************************/
 static void parse_line(uint8_t *line, uint16_t len)
 {
-    int32_t x = 0, y = 0, net = 0;
+    int32_t x = 0, y = 0, net = 0, manual = 0;
     char   *p;
 
     line[len] = '\0';                     /* s_line 预留了结尾 0 */
@@ -122,6 +122,7 @@ static void parse_line(uint8_t *line, uint16_t len)
 
     s_remote.x           = clamp100(x);
     s_remote.y           = clamp100(y);
+    s_remote.manual      = (find_field(p, "manual", &manual) && manual == 1) ? 1u : 0u;
     if(find_field(p, "net", &net))        /* 可选字段：ESP 报告自己的联网状态 */
     {
         s_remote.net = (net != 0) ? 1u : 0u;
@@ -164,6 +165,7 @@ void Remote_Init(void)
     s_remote.y           = 0;
     s_remote.net         = 1;             /* 默认按"已连上"处理（老固件没有 net 字段时） */
     s_remote.online      = 0;
+    s_remote.manual      = 0;
     s_remote.lastValidMs = BSP_Millis();
     s_remote.frameCount  = 0;
     s_remote.errorCount  = 0;

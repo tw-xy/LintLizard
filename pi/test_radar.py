@@ -69,6 +69,22 @@ class RadarTests(unittest.TestCase):
         self.assertEqual(self.radar.snapshot()["points"], [[180.0, 1500]])
 
 
+class SerialCommandTests(unittest.TestCase):
+    def test_manual_frames_and_reject_out_of_order_commands(self):
+        with patch.object(server.SerialLink, "_open"):
+            link = server.SerialLink("test-only", 115200)
+        link.fd = 123
+        with patch.object(server.os, "write", return_value=29) as write:
+            self.assertTrue(link.send(0, 0, "page-a", 2))
+            self.assertFalse(link.send(0, 100, "page-a", 1))
+            self.assertFalse(link.send(0, 100, "page-a", 2))
+            self.assertEqual(write.call_count, 1)
+            self.assertEqual(write.call_args.args[1], b'{"x":0,"y":0,"manual":1}\n')
+            self.assertTrue(link.send(0, -100, "page-a", 3))
+            self.assertEqual(write.call_args.args[1], b'{"x":0,"y":-100,"manual":1}\n')
+            self.assertTrue(link.send(0, 0))  # Existing browser/API compatibility.
+
+
 @unittest.skipIf(os.name == "nt", "Requires Linux PTY/termios")
 class SerialHttpTests(unittest.TestCase):
     def test_bidirectional_serial_and_http(self):
@@ -104,7 +120,7 @@ class SerialHttpTests(unittest.TestCase):
                 self.assertTrue(get("/cmd?x=0&y=0")["ok"])
                 import select
                 self.assertTrue(select.select([master], [], [], 1)[0])
-                self.assertEqual(os.read(master, 1024), b'{"x":0,"y":0}\n')
+                self.assertEqual(os.read(master, 1024), b'{"x":0,"y":0,"manual":1}\n')
                 time.sleep(0.55)
                 self.assertFalse(get("/scan")["online"])
                 self.assertEqual(get("/status")["radar_points"], 0)
