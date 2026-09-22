@@ -7,7 +7,7 @@ LintLizard 树莓派上位机 Web 控制服务（纯标准库，无需 pip / 无
   GET /                     控制界面（虚拟摇杆 + 摄像头 + 点云）
   GET /cmd?x=&y=            运动指令 -> 写 {"x":-100..100,"y":-100..100}\n 到串口
   GET /video                摄像头 MJPEG 流（rpicam-vid 编码）
-  GET /scan                 雷达点云 JSON（等 CH32 转发雷达数据后填充）
+  GET /scan                 雷达点云 JSON（角度 ° / 距离 mm）
   GET /status               状态 JSON
 
 环境变量（都有默认值，可不设）：
@@ -58,9 +58,15 @@ class SerialLink:
         self.tx_count = 0
         self.last_error = None
         self.stopped = True
+        self.last_open_attempt = None
         self._open()
 
     def _open(self):
+        now = time.monotonic()
+        if self.last_open_attempt is not None and now - self.last_open_attempt < 1.0:
+            return
+        self.last_open_attempt = now
+        fd = None
         try:
             fd = os.open(self.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
             attrs = termios.tcgetattr(fd)
@@ -70,6 +76,8 @@ class SerialLink:
             attrs[2] |= termios.CREAD | termios.CLOCAL
             attrs[2] &= ~(termios.CSTOPB | termios.PARENB | termios.CRTSCTS)
             attrs[3] = 0
+            attrs[6][termios.VMIN] = 0
+            attrs[6][termios.VTIME] = 0
             speed = getattr(termios, "B%d" % self.baud, termios.B115200)
             attrs[4] = speed
             attrs[5] = speed
@@ -79,9 +87,28 @@ class SerialLink:
             self.last_error = None
             print("[serial] %s @ %d 8N1 已打开" % (self.port, self.baud), flush=True)
         except Exception as exc:
+            if fd is not None:
+                os.close(fd)
             self.fd = None
             self.last_error = str(exc)
             print("[serial] 打开 %s 失败: %s" % (self.port, exc), flush=True)
+
+    def read(self):
+        """Nonblocking read, serialized with send/reopen to protect the shared fd."""
+        with self.lock:
+            if self.fd is None:
+                self._open()
+                # Reset any partial line after a disconnect, even if reopen worked.
+                return None
+            try:
+                return os.read(self.fd, 4096)
+            except BlockingIOError:
+                return b""
+            except OSError as exc:
+                self.last_error = str(exc)
+                os.close(self.fd)
+                self.fd = None
+                return None
 
     def send(self, x, y):
         x = max(-100, min(100, int(x)))
@@ -132,7 +159,7 @@ class SerialLink:
         }
 
 
-SERIAL = SerialLink(SERIAL_PORT, SERIAL_BAUD)
+SERIAL = None  # Open hardware in main(), so importing is side-effect free.
 
 
 # --------------------------------------------------------------------------- #
@@ -188,20 +215,91 @@ def mjpeg_frames():
 
 
 # --------------------------------------------------------------------------- #
-# 雷达点云（占位：等 CH32 把雷达数据转发过来后填充）
+# 雷达点云：CH32 USART3 ASCII 行流，最多保留每度的最新点
 # --------------------------------------------------------------------------- #
-RADAR_LOCK = threading.Lock()
-RADAR_POINTS = []
-RADAR_UPDATED = 0.0
+class RadarBuffer:
+    POINT_TTL = 0.5
+    MAX_LINE = 32
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.points = {}
+        self.pending = bytearray()
+        self.discard_line = False
+        self.updated = 0.0
+        self.last_point = None
+        self.rx_bytes = 0
+        self.received = 0
+        self.invalid = 0
+
+    def reset_stream(self):
+        with self.lock:
+            self.pending.clear()
+            self.discard_line = False
+            self.points.clear()
+            self.last_point = None
+
+    def feed(self, data):
+        with self.lock:
+            self.rx_bytes += len(data)
+            for byte in data:
+                if byte == 10:
+                    if not self.discard_line:
+                        self._line(bytes(self.pending).rstrip(b"\r"))
+                    self.pending.clear()
+                    self.discard_line = False
+                elif not self.discard_line:
+                    if len(self.pending) >= self.MAX_LINE:
+                        self.pending.clear()
+                        self.discard_line = True
+                        self.invalid += 1
+                    else:
+                        self.pending.append(byte)
+
+    def _line(self, line):
+        fields = line.split(b",")
+        if (len(fields) != 3 or fields[0] != b"R" or
+                not fields[1].isdigit() or not fields[2].isdigit()):
+            self.invalid += 1
+            return
+        angle, distance = int(fields[1]), int(fields[2])
+        if not (0 <= angle < 36000 and 120 <= distance <= 8000):
+            self.invalid += 1
+            return
+        now = time.monotonic()
+        self.points[angle // 100] = (angle / 100.0, distance, now)
+        self.last_point = now
+        self.updated = time.time()
+        self.received += 1
+
+    def snapshot(self):
+        with self.lock:
+            now = time.monotonic()
+            self.points = {key: point for key, point in self.points.items()
+                           if now - point[2] < self.POINT_TTL}
+            age = None if self.last_point is None else now - self.last_point
+            return {
+                "points": [[p[0], p[1]] for _, p in sorted(self.points.items())],
+                "updated": self.updated,
+                "online": age is not None and age < self.POINT_TTL,
+                "age_ms": None if age is None else round(age * 1000),
+                "received": self.received,
+                "invalid": self.invalid,
+                "rx_bytes": self.rx_bytes,
+            }
+
+
+RADAR = RadarBuffer()
 
 
 def radar_reader():
-    """预留：若 CH32 在串口上转发形如 R,<angle_cdeg>,<dist_mm> 的行，这里解析。
-
-    当前固件还没转发雷达数据，所以点云会保持为空。
-    """
     while True:
-        time.sleep(1.0)
+        data = SERIAL.read()
+        if data is None:
+            RADAR.reset_stream()
+        elif data:
+            RADAR.feed(data)
+        time.sleep(0.01)
 
 
 # --------------------------------------------------------------------------- #
@@ -260,7 +358,7 @@ INDEX_HTML = r"""<!doctype html>
       <img id="cam" src="/video" alt="camera">
     </div>
     <div class="card">
-      <h3>雷达点云</h3>
+      <h3>雷达点云 <span id="radarState">等待数据</span> · 圆环 1/2/3m · 上方为车头</h3>
       <canvas id="scan"></canvas>
     </div>
   </section>
@@ -354,7 +452,11 @@ async function pollScan(){
     const r = await fetch('/scan');
     const j = await r.json();
     drawScan(j.points || []);
-  } catch(e){}
+    document.getElementById('radarState').textContent = j.online ? ('在线 · ' + j.points.length + ' 点') : '无新数据';
+  } catch(e){
+    drawScan([]);
+    document.getElementById('radarState').textContent = '连接中断';
+  }
   setTimeout(pollScan, 400);
 }
 
@@ -407,17 +509,17 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": ok, "x": x, "y": y, "tx": SERIAL.tx_count})
 
         elif path == "/status":
+            radar = RADAR.snapshot()
             self._json({
                 "uptime": round(time.time() - START_TIME, 1),
                 "serial": SERIAL.status(),
                 "camera": camera_available(),
-                "radar_points": len(RADAR_POINTS),
+                "radar_points": len(radar["points"]),
+                "radar": {key: value for key, value in radar.items() if key != "points"},
             })
 
         elif path == "/scan":
-            with RADAR_LOCK:
-                pts = list(RADAR_POINTS)
-            self._json({"points": pts, "updated": RADAR_UPDATED})
+            self._json(RADAR.snapshot())
 
         elif path == "/video":
             if not camera_available():
@@ -438,6 +540,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    global SERIAL
+    SERIAL = SerialLink(SERIAL_PORT, SERIAL_BAUD)
     threading.Thread(target=SERIAL.watchdog, daemon=True).start()
     threading.Thread(target=radar_reader, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), Handler)

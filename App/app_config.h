@@ -46,6 +46,8 @@
 
 /* ==================== 激光雷达嗅探 ==================== */
 #define RADAR_STAT_PERIOD_MS     500u    /* 每隔多久打一行雷达摘要 */
+#define RADAR_STREAM_ENABLE        1u    /* USART3 -> Pi: R,angle_cdeg,dist_mm\n */
+#define RADAR_STREAM_DECIMATE      8u    /* 每 8 个有效点发 1 个；最大约 10KB/s */
 
 /* ==================== 激光雷达避障 ==================== */
 /* 第一版先保持 0：只解析点云并打印前向距离，不接管电机。

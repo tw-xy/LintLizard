@@ -18,6 +18,8 @@ uint32_t DBG_TxDropped(void);
 /* ---- ESP8266 口 ---- */
 uint16_t ESP_Read(uint8_t *dst, uint16_t maxLen);
 uint16_t ESP_Write(const uint8_t *src, uint16_t len);
+/* Nonblocking, whole frame or nothing; single main-loop producer only. */
+uint8_t  ESP_TryWriteFrame(const uint8_t *src, uint16_t len);
 uint32_t ESP_RxOverflow(void);
 uint32_t ESP_RxCount(void);
 

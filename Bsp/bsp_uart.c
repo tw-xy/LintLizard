@@ -331,6 +331,27 @@ uint32_t ESP_RxOverflow(void)
     return s_espRx.overflow;
 }
 
+uint8_t ESP_TryWriteFrame(const uint8_t *src, uint16_t len)
+{
+    /* ISR only frees space. Publish head once, after copying the whole frame. */
+    uint16_t head = s_espTx.head;
+    uint16_t used = (uint16_t)(head - s_espTx.tail);
+    uint16_t i;
+
+    if(len > ESP_TX_SIZE - used)
+    {
+        return 0;
+    }
+    for(i = 0; i < len; i++)
+    {
+        s_espTx.buf[(head + i) & s_espTx.mask] = src[i];
+    }
+    __asm__ volatile ("" ::: "memory");
+    s_espTx.head = (uint16_t)(head + len);
+    USART_ITConfig(USART3, USART_IT_TXE, ENABLE);
+    return 1;
+}
+
 uint32_t ESP_RxCount(void)
 {
     return s_espRxCount;

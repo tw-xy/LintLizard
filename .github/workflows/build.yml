@@ -7,6 +7,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  radar-tests:
+    name: Radar telemetry tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Pi parser, serial and HTTP
+        run: python3 -m unittest discover -s pi -v
+      - name: Test CH32 parser on host
+        run: |
+          gcc -std=c99 -Wall -Wextra -IApp -IBsp tests/radar_stream_test.c App/app_radar.c -o /tmp/radar_stream_test
+          /tmp/radar_stream_test
+
   firmware:
     name: CH32V307 firmware
     runs-on: ubuntu-latest

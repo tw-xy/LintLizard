@@ -9,6 +9,43 @@
 #include "app_config.h"
 #include "bsp_time.h"
 #include "bsp_uart.h"
+#include <stdio.h>
+
+#if RADAR_STREAM_ENABLE && RADAR_STREAM_DECIMATE < 8
+#error "RADAR_STREAM_DECIMATE must be >= 8 for 115200 baud text telemetry"
+#endif
+
+static uint16_t s_streamPhase = 0;
+static uint32_t s_streamSent = 0;
+static uint32_t s_streamDropped = 0;
+
+static void radar_stream_point(int32_t angleCdeg, uint16_t distMm)
+{
+#if RADAR_STREAM_ENABLE
+    char line[20];
+    int len;
+
+    if(++s_streamPhase < RADAR_STREAM_DECIMATE)
+    {
+        return;
+    }
+    s_streamPhase = 0;
+    /* Report car-relative angles, using the same mounting offset as avoidance. */
+    angleCdeg = (angleCdeg - AVOID_FRONT_OFFSET_CDEG) % 36000;
+    if(angleCdeg < 0) angleCdeg += 36000;
+    len = snprintf(line, sizeof(line), "R,%u,%u\n",
+                   (unsigned int)angleCdeg, (unsigned int)distMm);
+    if(len > 0 && len < (int)sizeof(line) &&
+       ESP_TryWriteFrame((const uint8_t *)line, (uint16_t)len))
+    {
+        s_streamSent++;
+    }
+    else
+    {
+        s_streamDropped++;
+    }
+#endif
+}
 
 #define RADAR_MAX_POINTS      80u
 #define RADAR_MAX_PKT_BYTES  (10u + 2u * RADAR_MAX_POINTS)
@@ -226,6 +263,8 @@ static void radar_parse_packet(const uint8_t *pkt, uint32_t nowMs)
             angleCdeg -= 36000;
         }
 
+        radar_stream_point(angleCdeg, distMm);
+
         if(in_sector(angleCdeg, frontCenter, AVOID_FRONT_HALF_ANGLE_CDEG))
         {
             cntFront++;
@@ -319,6 +358,9 @@ static void radar_feed(uint8_t b, uint32_t nowMs)
 
 void Radar_Init(void)
 {
+    s_streamPhase = 0;
+    s_streamSent = 0;
+    s_streamDropped = 0;
     s_bytes = 0;
     s_hdr = 0;
     s_pktOk = 0;
@@ -390,6 +432,8 @@ void Radar_Task(uint32_t nowMs)
                    (unsigned int)frontShow, (unsigned int)leftShow, (unsigned int)rightShow,
                    (unsigned int)dcs, (unsigned int)dfmt,
                    (unsigned int)RADAR_RxOverflow());
+        DBG_Printf("[scan] sent=%u drop=%u (total)\r\n",
+                   (unsigned int)s_streamSent, (unsigned int)s_streamDropped);
     }
 }
 

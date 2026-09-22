@@ -17,6 +17,7 @@ build/
 *.map
 *.lst
 *.d
+__pycache__/
 
 # 串口日志
 logs/
